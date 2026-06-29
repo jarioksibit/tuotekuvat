@@ -1,0 +1,6 @@
+/.venv
+/input
+/optimized
+/__pycache__
+
+mapping.candidates.json
