@@ -95,6 +95,16 @@ def parse_args() -> argparse.Namespace:
         "--mapping-output",
         help="Optional file path where the generated JSON should be written. Defaults to stdout.",
     )
+    mapping_parser.add_argument(
+        "--url-prefix",
+        default="",
+        help="Optional prefix added before each image stem in map output, for example https://assets.kuullos.fi/product_images/.",
+    )
+    mapping_parser.add_argument(
+        "--url-postfix",
+        default="",
+        help="Optional postfix added after each image stem in map output, for example .webp.",
+    )
     parser.add_argument(
         "--max-width",
         type=int,
@@ -189,7 +199,7 @@ def sort_image_stems(stems: Iterable[str]) -> list[str]:
     return sorted(stems, key=sort_key)
 
 
-def build_mapping_manifest(root: Path) -> list[dict[str, list[str]]]:
+def build_mapping_manifest(root: Path, url_prefix: str = "", url_postfix: str = "") -> list[dict[str, list[str]]]:
     groups: dict[str, list[str]] = {}
 
     for path in iter_image_files(root):
@@ -200,8 +210,12 @@ def build_mapping_manifest(root: Path) -> list[dict[str, list[str]]]:
         groups.setdefault(handle, []).append(stem)
 
     manifest: list[dict[str, list[str]]] = []
+    prefix = url_prefix.strip()
+    postfix = url_postfix.strip()
     for handle in sorted(groups):
-        manifest.append({"handle": handle, "urls": sort_image_stems(groups[handle])})
+        stems = sort_image_stems(groups[handle])
+        urls = [f"{prefix}{stem}{postfix}" for stem in stems]
+        manifest.append({"handle": handle, "urls": urls})
 
     return manifest
 
@@ -338,7 +352,11 @@ def main() -> int:
     cache = {} if args.force else load_cache(cache_path)
 
     if args.command == "map":
-        manifest = build_mapping_manifest(input_root)
+        manifest = build_mapping_manifest(
+            input_root,
+            url_prefix=args.url_prefix,
+            url_postfix=args.url_postfix,
+        )
         write_mapping_manifest(manifest, args.mapping_output)
         return 0
 

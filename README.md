@@ -126,8 +126,14 @@ This skips image processing and uploads whatever is already in the output folder
 
 If you want a first-pass JSON mapping for your database records, the script can group image stems into the same `handle` / `urls` structure you already use:
 
+For preview
 ```bash
-python optimize_images.py map --input optimized --mapping-output mapping.candidates.json
+python optimize_images.py map --input optimized --url-prefix "https://assets.kuullos.fi/product_images/" --url-postfix ".webp"
+```
+
+For mapping file generation
+```bash
+python optimize_images.py map --input optimized --url-prefix "https://assets.kuullos.fi/product_images/" --url-postfix ".webp" --mapping-output mapping.candidates.json
 ```
 
 The generator strips only the trailing image index from filenames, so it works well for product images like `product-name-1`, `product-name-2`, and similar sets. It will not guess special database-specific aliases, but it removes a lot of the manual grouping work.
