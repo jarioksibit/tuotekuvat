@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
@@ -105,6 +106,24 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional postfix added after each image stem in map output, for example .webp.",
     )
+    mapping_parser.add_argument(
+        "--sku-source",
+        default="../kuullos-medusa/data/catalog/supplier-mapping.csv",
+        help=(
+            "CSV file used to resolve kuullos_sku values into mapping output. "
+            "Defaults to ../kuullos-medusa/data/catalog/supplier-mapping.csv when available."
+        ),
+    )
+    mapping_parser.add_argument(
+        "--sku-handle-column",
+        default="kuullos_handle",
+        help="Handle column name in --sku-source CSV.",
+    )
+    mapping_parser.add_argument(
+        "--sku-column",
+        default="kuullos_sku",
+        help="SKU column name in --sku-source CSV.",
+    )
     parser.add_argument(
         "--max-width",
         type=int,
@@ -199,7 +218,41 @@ def sort_image_stems(stems: Iterable[str]) -> list[str]:
     return sorted(stems, key=sort_key)
 
 
-def build_mapping_manifest(root: Path, url_prefix: str = "", url_postfix: str = "") -> list[dict[str, list[str]]]:
+def load_sku_lookup(
+    csv_path: Path,
+    handle_column: str,
+    sku_column: str,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    by_handle: dict[str, set[str]] = {}
+    by_sku_slug: dict[str, set[str]] = {}
+
+    with csv_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            raw_handle = (row.get(handle_column) or "").strip()
+            raw_sku = (row.get(sku_column) or "").strip()
+            if not raw_handle or not raw_sku:
+                continue
+
+            handle_key = normalize_handle_candidate(raw_handle.lower())
+            sku_slug = normalize_handle_candidate(raw_sku.lower())
+
+            if handle_key:
+                by_handle.setdefault(handle_key, set()).add(raw_sku)
+            if sku_slug:
+                by_sku_slug.setdefault(sku_slug, set()).add(raw_sku)
+
+    return by_handle, by_sku_slug
+
+
+def build_mapping_manifest(
+    root: Path,
+    url_prefix: str = "",
+    url_postfix: str = "",
+    sku_source: str = "",
+    sku_handle_column: str = "kuullos_handle",
+    sku_column: str = "kuullos_sku",
+) -> list[dict[str, object]]:
     groups: dict[str, list[str]] = {}
 
     for path in iter_image_files(root):
@@ -209,18 +262,65 @@ def build_mapping_manifest(root: Path, url_prefix: str = "", url_postfix: str = 
             continue
         groups.setdefault(handle, []).append(stem)
 
-    manifest: list[dict[str, list[str]]] = []
+    manifest: list[dict[str, object]] = []
     prefix = url_prefix.strip()
     postfix = url_postfix.strip()
+
+    sku_map_by_handle: dict[str, set[str]] = {}
+    sku_map_by_slug: dict[str, set[str]] = {}
+    sku_source_path = Path(sku_source).resolve() if sku_source else None
+    if sku_source_path and sku_source_path.exists():
+        sku_map_by_handle, sku_map_by_slug = load_sku_lookup(
+            sku_source_path,
+            handle_column=sku_handle_column,
+            sku_column=sku_column,
+        )
+    elif sku_source_path and sku_source:
+        print(
+            f"Warning: SKU source not found at {sku_source_path}. Falling back to handle-only mapping.",
+        )
+
+    sku_assigned_count = 0
+    sku_ambiguous_count = 0
+
     for handle in sorted(groups):
         stems = sort_image_stems(groups[handle])
         urls = [f"{prefix}{stem}{postfix}" for stem in stems]
-        manifest.append({"handle": handle, "urls": urls})
+
+        entry: dict[str, object] = {"handle": handle, "urls": urls}
+
+        resolved_sku: str | None = None
+        handle_key = normalize_handle_candidate(handle.lower())
+        direct_sku_matches = sku_map_by_slug.get(handle_key, set())
+
+        if len(direct_sku_matches) == 1:
+            resolved_sku = next(iter(direct_sku_matches))
+        elif len(direct_sku_matches) > 1:
+            sku_ambiguous_count += 1
+        else:
+            handle_sku_matches = sku_map_by_handle.get(handle_key, set())
+            if len(handle_sku_matches) == 1:
+                resolved_sku = next(iter(handle_sku_matches))
+            elif len(handle_sku_matches) > 1:
+                sku_ambiguous_count += 1
+
+        if resolved_sku:
+            entry["kuullos_sku"] = resolved_sku
+            sku_assigned_count += 1
+
+        manifest.append(entry)
+
+    if sku_map_by_handle or sku_map_by_slug:
+        print(
+            "SKU mapping summary: "
+            f"{sku_assigned_count}/{len(manifest)} entries resolved, "
+            f"{sku_ambiguous_count} ambiguous.",
+        )
 
     return manifest
 
 
-def write_mapping_manifest(manifest: list[dict[str, list[str]]], output_path: str | None) -> None:
+def write_mapping_manifest(manifest: list[dict[str, object]], output_path: str | None) -> None:
     payload = json.dumps(manifest, indent=2, ensure_ascii=False)
     if output_path:
         Path(output_path).write_text(payload + "\n", encoding="utf-8")
@@ -356,6 +456,9 @@ def main() -> int:
             input_root,
             url_prefix=args.url_prefix,
             url_postfix=args.url_postfix,
+            sku_source=args.sku_source,
+            sku_handle_column=args.sku_handle_column,
+            sku_column=args.sku_column,
         )
         write_mapping_manifest(manifest, args.mapping_output)
         return 0

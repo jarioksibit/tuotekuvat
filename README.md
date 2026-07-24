@@ -55,6 +55,7 @@ export CLOUDFLARE_R2_ENDPOINT="https://<accountid>.r2.cloudflarestorage.com"
 
 source .venv/bin/activate
 
+python optimize_images.py optimize --upload-r2 --r2-bucket kuullos-dev --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
 python optimize_images.py optimize --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
 
 python optimize_images.py optimize --input input --output optimized --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
@@ -126,7 +127,7 @@ This skips image processing and uploads whatever is already in the output folder
 
 ## Generate mapping candidates
 
-If you want a first-pass JSON mapping for your database records, the script can group image stems into the same `handle` / `urls` structure you already use:
+If you want a first-pass JSON mapping for your database records, the script can generate SKU-aware candidates (`kuullos_sku`) with handle and URLs:
 
 For preview
 ```bash
@@ -138,4 +139,10 @@ For mapping file generation
 python optimize_images.py map --input optimized --url-prefix "https://assets.kuullos.fi/product_images/" --url-postfix ".webp" --mapping-output mapping.candidates.json
 ```
 
-The generator strips only the trailing image index from filenames, so it works well for product images like `product-name-1`, `product-name-2`, and similar sets. It will not guess special database-specific aliases, but it removes a lot of the manual grouping work.
+By default, the map command looks up SKUs from `../kuullos-medusa/data/catalog/supplier-mapping.csv` using `kuullos_handle` and `kuullos_sku` columns. You can override this with:
+
+- `--sku-source /path/to/supplier-mapping.csv`
+- `--sku-handle-column kuullos_handle`
+- `--sku-column kuullos_sku`
+
+The generator strips only the trailing image index from filenames, so it works well for product images like `product-name-1`, `product-name-2`, and similar sets. If a SKU cannot be resolved uniquely, the entry is still emitted with `handle`/`urls` so you can complete it manually.
