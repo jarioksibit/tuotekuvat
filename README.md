@@ -53,6 +53,8 @@ export CLOUDFLARE_R2_ACCESS_KEY="your_access_key_id"
 export CLOUDFLARE_R2_SECRET_KEY="your_secret_access_key"
 export CLOUDFLARE_R2_ENDPOINT="https://<accountid>.r2.cloudflarestorage.com"
 
+source .venv/bin/activate
+
 python optimize_images.py optimize --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
 
 python optimize_images.py optimize --input input --output optimized --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
