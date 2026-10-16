@@ -55,8 +55,7 @@ export CLOUDFLARE_R2_ENDPOINT="https://<accountid>.r2.cloudflarestorage.com"
 
 source .venv/bin/activate
 
-python optimize_images.py optimize --upload-r2 --r2-bucket kuullos-dev --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
-python optimize_images.py optimize --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
+python optimize_images.py optimize --input input --output optimized --upload-r2 --r2-bucket kuullos-dev --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
 
 python optimize_images.py optimize --input input --output optimized --upload-r2 --r2-bucket kuullos-prod --r2-endpoint "$CLOUDFLARE_R2_ENDPOINT" --r2-prefix product_images
 ```
@@ -136,6 +135,9 @@ python optimize_images.py map --input optimized --url-prefix "https://assets.kuu
 
 For mapping file generation
 ```bash
+
+python optimize_images.py map --input optimized --url-prefix "https://pub-155b54f5a0fa4dbe96c45d27146f9f86.r2.dev/product_images/" --url-postfix ".webp" --mapping-output mapping.candidates.json
+
 python optimize_images.py map --input optimized --url-prefix "https://assets.kuullos.fi/product_images/" --url-postfix ".webp" --mapping-output mapping.candidates.json
 ```
 
